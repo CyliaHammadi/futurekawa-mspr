@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FutureKawa — Suivi des stocks</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f0; color: #1a1a18; }
+    header { background: #1a1a18; color: #fff; padding: 16px 32px; display: flex; align-items: center; gap: 12px; }
+    header h1 { font-size: 20px; font-weight: 500; }
+    .badge { background: #E24B4A; color: #fff; border-radius: 12px; padding: 3px 10px; font-size: 12px; display: none; }
+    .btn-header { padding: 8px 16px; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; }
+    .layout { display: grid; grid-template-columns: 300px 1fr; min-height: calc(100vh - 57px); }
+    .sidebar { background: #fff; border-right: 1px solid #e0e0d8; padding: 20px; display: flex; flex-direction: column; }
+    .sidebar h2 { font-size: 12px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 12px; }
+    .pays-btn { width: 100%; padding: 10px 14px; margin-bottom: 6px; border: 1px solid #e0e0d8; background: #fff; border-radius: 8px; cursor: pointer; text-align: left; font-size: 14px; font-weight: 500; transition: all .15s; }
+    .pays-btn:hover { background: #f0f0ea; }
+    .pays-btn.actif { background: #1a1a18; color: #fff; }
+    
+    /* Filtre et pagination de la liste des lots */
+    .barre-recherche-date { width: 100%; padding: 8px 12px; margin-bottom: 12px; border: 1px solid #e0e0d8; border-radius: 8px; font-size: 13px; outline: none; font-family: inherit; }
+    .barre-recherche-date:focus { border-color: #1a1a18; }
+    .pagination-lots { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 8px; }
+    .btn-page { flex: 1; padding: 6px 10px; border: 1px solid #e0e0d8; background: #fff; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; }
+    .btn-page:disabled { opacity: 0.4; cursor: not-allowed; }
+    .info-page { font-size: 11px; color: #666; font-weight: 500; }
+
+    .lot-item { padding: 10px 12px; margin-bottom: 6px; border: 1px solid #e0e0d8; border-radius: 8px; cursor: pointer; transition: all .15s; background: #fff; }
+    .lot-item:hover { border-color: #888; }
+    .lot-item.actif { border-color: #1a1a18; background: #f8f8f4; }
+    .lot-id { font-size: 13px; font-weight: 500; }
+    .lot-meta { font-size: 11px; color: #888; margin-top: 2px; }
+    .main { padding: 24px 32px; }
+    .main h2 { font-size: 18px; font-weight: 500; margin-bottom: 20px; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: #fff; border: 1px solid #e0e0d8; border-radius: 12px; padding: 16px 20px; }
+    .stat-card .val { font-size: 28px; font-weight: 500; }
+    .stat-card .lbl { font-size: 12px; color: #888; margin-top: 4px; }
+    .charts { display: grid; grid-template-columns: 1fr; gap: 20px; margin-bottom: 24px;}
+    .chart-card { background: #fff; border: 1px solid #e0e0d8; border-radius: 12px; padding: 20px; }
+    .chart-card h3 { font-size: 14px; font-weight: 500; margin-bottom: 16px; color: #444; }
+    .alerte-item { padding: 10px 14px; margin-bottom: 8px; border-radius: 8px; border-left: 3px solid #E24B4A; background: #FCEBEB; font-size: 13px; }
+    .alerte-type { font-weight: 500; color: #A32D2D; }
+    .alerte-msg { color: #555; margin-top: 2px; }
+    .loader { text-align: center; padding: 40px; color: #888; font-size: 14px; }
+    .vide { text-align: center; padding: 40px; color: #aaa; font-size: 14px; }
+    .btn-retour { padding: 8px 16px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; background: #fff; font-size: 13px; margin-top: 10px; }
+    .panneau { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+    .panneau-inner { background: #fff; border-radius: 12px; padding: 30px; max-width: 500px; margin: 80px auto; position: relative; }
+    .panneau h2 { font-size: 18px; font-weight: 500; margin-bottom: 20px; }
+    .champ { margin-bottom: 14px; }
+    .champ label { font-size: 13px; font-weight: 500; display: block; margin-bottom: 6px; }
+    .champ input, .champ select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
+    .champ small { font-size: 11px; color: #888; margin-top: 4px; display: block; }
+    .btn-fermer { position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 20px; cursor: pointer; color: #888; }
+    .resultat { display: none; padding: 12px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; }
+    .flex-gap { display: flex; gap: 10px; }
+    .date-graphe-unique { font-size: 13px; color: #666; font-weight: 500; margin-bottom: 12px; background: #fff; display: inline-block; padding: 6px 12px; border-radius: 6px; border: 1px solid #e0e0d8; }
+    
+    .table-card { background: #fff; border: 1px solid #e0e0d8; border-radius: 12px; padding: 20px; margin-top: 20px; }
+    .table-header-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+    .table-card h3 { font-size: 15px; font-weight: 500; color: #1a1a18; }
+    .barre-recherche { padding: 8px 14px; border: 1px solid #e0e0d8; border-radius: 8px; font-size: 13px; width: 300px; outline: none; }
+    .barre-recherche:focus { border-color: #1a1a18; }
+    .wrapper-table { max-height: 330px; overflow-y: auto; border: 1px solid #e0e0d8; border-radius: 8px; }
+    .histo-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+    .histo-table th { background: #f8f8f4; padding: 10px 12px; color: #666; font-weight: 500; border-bottom: 2px solid #e0e0d8; position: sticky; top: 0; z-index: 10; }
+    .histo-table td { padding: 10px 12px; border-bottom: 1px solid #e0e0d8; color: #333; }
+    .histo-table tr:hover { background: #fafafa; }
+    .badge-conformite { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+    .badge-conformite.ok { background: #EAF3DE; color: #3B6D11; }
+    .badge-conformite.ko { background: #FCEBEB; color: #A32D2D; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>FutureKawa — Suivi des stocks</h1>
+  <span class="badge" id="badge">0 alerte</span>
+  <button class="btn-header" onclick="ouvrirCreerLot()" style="margin-left:auto; background:#1D9E75; color:#fff;">+ Nouveau lot</button>
+  <button class="btn-header" onclick="ouvrirTestAlertes()" style="background:#E24B4A; color:#fff;">Tester les mesures</button>
+</header>
+
+<div id="panneau-lot" class="panneau">
+  <div class="panneau-inner">
+    <button class="btn-fermer" onclick="fermerCreerLot()">✕</button>
+    <h2>+ Nouveau lot de café</h2>
+    <div class="champ">
+      <label>Pays</label>
+      <select id="lot-pays" onchange="mettreAJourPlaceholder()">
+        <option value="1">🇧🇷 Brésil (Exploitation 1)</option>
+        <option value="2">🇧🇷 Brésil (Exploitation 2)</option>
+        <option value="3">🇪🇨 Équateur</option>
+        <option value="4">🇨🇴 Colombie</option>
+      </select>
+    </div>
+    <div class="champ">
+      <label>ID du lot</label>
+      <input id="lot-id" type="text" placeholder="LOT-BR-2026-001" oninput="this.value = this.value.toUpperCase()">
+      <small id="lot-id-aide">Format requis : LOT-BR-AAAA-NNN</small>
+    </div>
+    <div class="champ">
+      <label>Poids (kg)</label>
+      <input id="lot-poids-saisie" type="number" value="500">
+    </div>
+    <div class="champ" style="margin-bottom:20px;">
+      <label>Qualité</label>
+      <select id="lot-qualite">
+        <option value="premium">Premium</option>
+        <option value="standard">Standard</option>
+      </select>
+    </div>
+    <div id="lot-resultat" class="resultat"></div>
+    <div class="flex-gap">
+      <button onclick="creerLot()" style="flex:1; padding:12px; background:#1D9E75; color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:14px; font-weight:500;"> Créer le lot</button>
+      <button onclick="fermerCreerLot()" style="flex:1; padding:12px; background:#f5f5f0; color:#333; border:1px solid #ddd; border-radius:8px; cursor:pointer; font-size:14px;">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<div id="panneau-test" class="panneau">
+  <div class="panneau-inner">
+    <button class="btn-fermer" onclick="fermerTestAlertes()">✕</button>
+    <h2>Tester les mesures</h2>
+    <p style="font-size:13px; color:#888; margin-bottom:20px;">Modifiez les valeurs pour voir l'alerte apparaître ou disparaître instantanément.</p>
+    <div class="champ">
+      <label>Lot ID</label>
+      <select id="test-lot" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:8px; font-size:14px;">
+        <option value="">Tous les lots</option>
+      </select>
+    </div>
+    <div class="champ">
+      <label>Température (°C)</label>
+      <input id="test-temp" type="number" value="35" step="0.1">
+    </div>
+    <div class="champ">
+      <label>Humidité (%)</label>
+      <input id="test-hum" type="number" value="70" step="0.1">
+    </div>
+    <div id="test-resultat" class="resultat"></div>
+    <div class="flex-gap">
+      <button onclick="envoyerTestMesure()" style="flex:1; padding:12px; background:#1a1a18; color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:14px; font-weight:500;">Envoyer la mesure</button>
+      <button onclick="envoyerMesureNormale()" style="flex:1; padding:12px; background:#EAF3DE; color:#3B6D11; border:1px solid #97C459; border-radius:8px; cursor:pointer; font-size:14px; font-weight:500;">Remettre à la normale</button>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <h2>Pays</h2>
+    <button class="pays-btn actif" onclick="selectionnerPays('bresil', this)">🇧🇷 Brésil</button>
+    <button class="pays-btn" onclick="selectionnerPays('equateur', this)">🇪🇨 Équateur</button>
+    <button class="pays-btn" onclick="selectionnerPays('colombie', this)">🇨🇴 Colombie</button>
+    
+    <!-- Préservation du message d'origine "Lots (FIFO)" -->
+    <h2 style="margin-top:24px;">Lots (FIFO)</h2>
+    
+    <!-- Organisation claire du bloc de tri des lots -->
+    <label for="filtre-lot-date" style="font-size: 11px; color: #666; font-weight: 500; margin-bottom: 4px; display: block;">Filtrer par date d'entrée :</label>
+    <input type="date" id="filtre-lot-date" class="barre-recherche-date" onchange="reinitialiserPageEtRafraichir()">
+
+    <!-- Liste des lots -->
+    <div id="liste-lots"><div class="loader">Chargement...</div></div>
+    
+    <!-- Contrôles de pagination (Max 5) -->
+    <div class="pagination-lots" id="controles-pagination">
+      <button class="btn-page" id="btn-prev" onclick="changerPageLot(-1)">◀ Préc.</button>
+      <span class="info-page" id="info-page-lot">Page 1/1</span>
+      <button class="btn-page" id="btn-next" onclick="changerPageLot(1)">Suiv. ▶</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div id="vue-pays">
+      <h2 id="titre-pays">Brésil</h2>
+      <div class="stats">
+        <div class="stat-card"><div class="val" id="stat-total">—</div><div class="lbl">Lots en stock</div></div>
+        <div class="stat-card"><div class="val" id="stat-alertes" style="color:#E24B4A">0</div><div class="lbl">Alertes en temps réel</div></div>
+        <div class="stat-card"><div class="val" id="stat-derniere">—</div><div class="lbl">Dernière mesure</div></div>
+      </div>
+      
+      <div id="section-alertes" style="display:none; margin-bottom:24px;">
+        <h3 style="font-size:14px; font-weight:500; margin-bottom:10px; color:#A32D2D;">⚠️ Alertes actives (Dépassement en cours)</h3>
+        <div id="alertes-liste"></div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-header-flex">
+          <h3>Historique global des mesures</h3>
+          <input type="text" id="input-filtre" class="barre-recherche" oninput="filtrerHistorique()" placeholder="Filtrer par ID, date, conforme, alerte...">
+        </div>
+        <div class="wrapper-table">
+          <table class="histo-table">
+            <thead>
+              <tr>
+                <th>Date / Heure</th>
+                <th>Lot ID</th>
+                <th>Température</th>
+                <th>Humidité</th>
+                <th>Statut de la mesure</th>
+              </tr>
+            </thead>
+            <tbody id="corps-historique">
+              <tr><td colspan="5" style="text-align:center; color:#999;">Aucune donnée</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="vue-lot" style="display:none">
+      <h2 id="titre-lot">—</h2>
+      <div class="stats">
+        <div class="stat-card"><div class="val" id="lot-jours">—</div><div class="lbl">Jours en stock</div></div>
+        <div class="stat-card"><div class="val" id="lot-statut">—</div><div class="lbl">Statut</div></div>
+        <div class="stat-card"><div class="val" id="lot-poids">—</div><div class="lbl">Poids (kg)</div></div>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div id="date-graphe" class="date-graphe-unique">Date : —</div>
+        <button onclick="telechargerCSV()" style="padding:8px 16px; background:#1a1a18; color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:13px;">
+          Télécharger l'historique CSV
+        </button>
+      </div>
+      <div class="charts">
+        <div class="chart-card"><h3>Température (°C)</h3><canvas id="chart-temp" style="max-height:200px;"></canvas></div>
+        <div class="chart-card"><h3>Humidité (%)</h3><canvas id="chart-hum" style="max-height:200px;"></canvas></div>
+      </div>
+      <button class="btn-retour" onclick="retourPays()">← Retour</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "http://localhost:8000";
+let paysActuel = "bresil";
+let chartTemp = null, chartHum = null;
+let donneesHistoriquesActuelles = [];
+
+// Variables globales pour gérer la pagination des lots
+let pageActuelleLot = 1;
+const LOTS_PAR_PAGE = 5;
+
+const noms = { bresil: "Brésil", equateur: "Équateur", colombie: "Colombie" };
+
+const exploitationsConfiguration = [
+  {"pays":"bresil","humidite_ideale":55.0,"tolerance_humidite":2.0,"nom":"Fazenda São João","id":1,"temp_ideale":29.0,"tolerance_temp":3.0},
+  {"pays":"bresil","humidite_ideale":55.0,"tolerance_humidite":2.0,"nom":"Fazenda São João","id":2,"temp_ideale":29.0,"tolerance_temp":3.0},
+  {"pays":"equateur","humidite_ideale":60.0,"tolerance_humidite":2.0,"nom":"Hacienda El Oro","id":3,"temp_ideale":31.0,"tolerance_temp":3.0},
+  {"pays":"colombie","humidite_ideale":80.0,"tolerance_humidite":2.0,"nom":"Finca La Sierra","id":4,"temp_ideale":26.0,"tolerance_temp":3.0}
+];
+
+function obtenirSeuilsPourMesure(exploitationId) {
+  const config = exploitationsConfiguration.find(e => e.id === exploitationId);
+  if (!config) return { tMin: 15, tMax: 35, hMin: 40, hMax: 70 };
+  return {
+    tMin: config.temp_ideale - config.tolerance_temp,
+    tMax: config.temp_ideale + config.tolerance_temp,
+    hMin: config.humidite_ideale - config.tolerance_humidite,
+    hMax: config.humidite_ideale + config.tolerance_humidite
+  };
+}
+
+function obtenirIdsParPays(pays) {
+  return exploitationsConfiguration
+    .filter(e => e.pays.toLowerCase() === pays.toLowerCase())
+    .map(e => e.id);
+}
+
+async function get(chemin) {
+  try {
+    const r = await fetch(API + chemin);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+
+function mettreAJourPlaceholder() {
+  const pays = document.getElementById("lot-pays").value;
+  const exemples = { "1": "LOT-BR-2026-001", "2": "LOT-BR-2026-002", "3": "LOT-EQ-2026-001", "4": "LOT-CO-2026-001" };
+  document.getElementById("lot-id").placeholder = exemples[pays];
+}
+
+function ouvrirCreerLot() {
+  document.getElementById("panneau-lot").style.display = "block";
+  document.getElementById("lot-resultat").style.display = "none";
+  document.getElementById("lot-id").value = "";
+  mettreAJourPlaceholder();
+}
+function fermerCreerLot() { document.getElementById("panneau-lot").style.display = "none"; }
+
+async function creerLot() {
+  const id = document.getElementById("lot-id").value.trim();
+  const pays = document.getElementById("lot-pays").value;
+  const poids = parseFloat(document.getElementById("lot-poids-saisie").value);
+  const qualite = document.getElementById("lot-qualite").value;
+
+  if (!id) return;
+  try {
+    await fetch(API + "/lots", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, exploitation_id: parseInt(pays), entrepot_id: 1, poids_kg: poids, qualite, jours_stockage: 0, date_stockage: new Date().toISOString() })
+    });
+    fermerCreerLot();
+    await rafraichirDonnees();
+  } catch(e) {}
+}
+
+async function supprimerLot(lotId) {
+  if (!confirm(`Supprimer ${lotId} ?`)) return;
+  await fetch(API + "/lots/" + lotId, { method: "DELETE" });
+  await rafraichirDonnees();
+}
+
+function ouvrirTestAlertes() {
+  document.getElementById("panneau-test").style.display = "block";
+  document.getElementById("test-resultat").style.display = "none";
+}
+function fermerTestAlertes() { document.getElementById("panneau-test").style.display = "none"; }
+
+async function envoyerTestMesure() {
+  const temp = parseFloat(document.getElementById("test-temp").value);
+  const hum  = parseFloat(document.getElementById("test-hum").value);
+  const lot  = document.getElementById("test-lot").value;
+  try {
+    await fetch(API + "/mesures-iot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ temperature: temp, humidite: hum, entrepot_id: 1, lot_id: lot, pays: paysActuel })
+    });
+    await rafraichirDonnees();
+    fermerTestAlertes();
+  } catch(e) {}
+}
+
+async function envoyerMesureNormale() {
+  const reglesBrésil = obtenirSeuilsPourMesure(1); 
+  document.getElementById("test-temp").value = reglesBrésil.tMin + 1;
+  document.getElementById("test-hum").value = reglesBrésil.hMin + 1;
+  await envoyerTestMesure();
+}
+
+function selectionnerPays(pays, btn) {
+  paysActuel = pays;
+  pageActuelleLot = 1; // Reset de la pagination
+  document.querySelectorAll(".pays-btn").forEach(b => b.classList.remove("actif"));
+  btn.classList.add("actif");
+  document.getElementById("titre-pays").textContent = noms[pays];
+  document.getElementById("vue-lot").style.display = "none";
+  document.getElementById("vue-pays").style.display = "block";
+  rafraichirDonnees();
+}
+
+function reinitialiserPageEtRafraichir() {
+  pageActuelleLot = 1;
+  rafraichirDonnees();
+}
+
+function changerPageLot(direction) {
+  pageActuelleLot += direction;
+  rafraichirDonnees();
+}
+
+async function rafraichirDonnees() {
+  const lots = await get("/lots");
+  if (!lots) return;
+
+  const ids = obtenirIdsParPays(paysActuel);
+  let lotsFiltres = lots.filter(l => ids.includes(l.exploitation_id));
+  document.getElementById("stat-total").textContent = lotsFiltres.length;
+
+  // Tri FIFO (du lot le plus ancien au plus récent)
+  lotsFiltres.sort((a, b) => new Date(a.date_stockage) - new Date(b.date_stockage));
+
+  // Application du filtre par date si saisi
+  const filtreDateSaisie = document.getElementById("filtre-lot-date").value;
+  if (filtreDateSaisie) {
+    lotsFiltres = lotsFiltres.filter(lot => {
+      const dateLotFormate = new Date(lot.date_stockage).toISOString().split('T')[0];
+      return dateLotFormate === filtreDateSaisie;
+    });
+  }
+
+  // Calculs pour la pagination (Découpage par paquets de 5)
+  const totalLotsFiltres = lotsFiltres.length;
+  const totalPages = Math.ceil(totalLotsFiltres / LOTS_PAR_PAGE) || 1;
+  
+  if (pageActuelleLot > totalPages) pageActuelleLot = totalPages;
+  if (pageActuelleLot < 1) pageActuelleLot = 1;
+
+  const indiceDebut = (pageActuelleLot - 1) * LOTS_PAR_PAGE;
+  const indiceFin = indiceDebut + LOTS_PAR_PAGE;
+  const lotsAffichesPagination = lotsFiltres.slice(indiceDebut, indiceFin);
+
+  // Mise à jour des boutons de pagination de la barre latérale
+  document.getElementById("info-page-lot").textContent = `Page ${pageActuelleLot}/${totalPages}`;
+  document.getElementById("btn-prev").disabled = (pageActuelleLot === 1);
+  document.getElementById("btn-next").disabled = (pageActuelleLot === totalPages);
+
+  const listeEl = document.getElementById("liste-lots");
+  if (!lotsAffichesPagination.length) {
+    listeEl.innerHTML = '<div class="vide">Aucun lot</div>';
+  } else {
+    listeEl.innerHTML = lotsAffichesPagination.map(lot => {
+      const date = new Date(lot.date_stockage).toLocaleDateString("fr-FR");
+      const styleAncien = lot.jours_stockage > 365 ? 'style="border-color: #E24B4A; background: #FFF5F5;"' : '';
+      
+      return `
+        <div class="lot-item" ${styleAncien} onclick="voirLot('${lot.id}', this)">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="lot-id">${lot.id} ${lot.jours_stockage > 365 ? '⚠️' : ''}</div>
+            <button onclick="event.stopPropagation(); supprimerLot('${lot.id}')" style="background:none; border:none; color:#E24A4A; cursor:pointer;">supprimer</button>
+          </div>
+          <div class="lot-meta">${date} · ${lot.jours_stockage}j</div>
+        </div>`;
+    }).join("");
+  }
+
+  let toutesLesMesures = [];
+  let alertesActuelles = []; 
+
+  for (const lot of lotsFiltres) {
+    if (lot.jours_stockage > 365) {
+      alertesActuelles.push({
+        lot_id: lot.id,
+        msg: `Alerte FIFO : Ce lot dépasse 1 an de stockage (${lot.jours_stockage} jours). Sortie de stock requise.`
+      });
+    }
+
+    const mesures = await get(`/lots/${lot.id}/mesures`);
+    if (mesures && mesures.length > 0) {
+      mesures.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      const derniereMesure = mesures[0];
+      
+      const regles = obtenirSeuilsPourMesure(lot.exploitation_id);
+      const tOk = derniereMesure.temperature >= regles.tMin && derniereMesure.temperature <= regles.tMax;
+      const hOk = derniereMesure.humidite >= regles.hMin && derniereMesure.humidite <= regles.hMax;
+
+      if (!tOk || !hOk) {
+        let raison = "";
+        if (!tOk) raison += `Température critique (${derniereMesure.temperature}°C). `;
+        if (!hOk) raison += `Humidité critique (${derniereMesure.humidite}%).`;
+        alertesActuelles.push({ lot_id: lot.id, msg: raison });
+      }
+
+      mesures.forEach(m => {
+        let t = m.timestamp; if (!t.endsWith('Z')) t += 'Z';
+        const mTOk = m.temperature >= regles.tMin && m.temperature <= regles.tMax;
+        const mHOk = m.humidite >= regles.hMin && m.humidite <= regles.hMax;
+        toutesLesMesures.push({
+          ...m,
+          lot_id: lot.id,
+          dateFormatee: new Date(t).toLocaleString("fr-FR"),
+          statutConformite: (mTOk && mHOk) ? "Conforme" : "Alerte"
+        });
+      });
+    }
+  }
+
+  toutesLesMesures.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  donneesHistoriquesActuelles = toutesLesMesures;
+
+  if (toutesLesMesures.length > 0) {
+    document.getElementById("stat-derniere").textContent = `${toutesLesMesures[0].temperature}°C / ${toutesLesMesures[0].humidite}%`;
+  } else {
+    document.getElementById("stat-derniere").textContent = "Aucune";
+  }
+
+  const badge = document.getElementById("badge");
+  document.getElementById("stat-alertes").textContent = alertesActuelles.length;
+
+  if (alertesActuelles.length > 0) {
+    badge.style.display = "inline-block";
+    badge.textContent = `${alertesActuelles.length} alerte${alertesActuelles.length > 1 ? 's' : ''}`;
+    document.getElementById("section-alertes").style.display = "block";
+    document.getElementById("alertes-liste").innerHTML = alertesActuelles.map(a => `
+      <div class="alerte-item">
+        <div class="alerte-type">⚠️ ALERTE STOCKAGE — ${a.lot_id}</div>
+        <div class="alerte-msg">${a.msg}</div>
+      </div>`).join("");
+  } else {
+    badge.style.display = "none";
+    document.getElementById("section-alertes").style.display = "none";
+  }
+
+  filtrerHistorique();
+}
+
+function filtrerHistorique() {
+  const terme = document.getElementById("input-filtre").value.toLowerCase().trim();
+  const corpsHisto = document.getElementById("corps-historique");
+  const donneesFiltrees = donneesHistoriquesActuelles.filter(m => m.lot_id.toLowerCase().includes(terme) || m.dateFormatee.toLowerCase().includes(terme) || m.statutConformite.toLowerCase().includes(terme));
+
+  if (donneesFiltrees.length === 0) {
+    corpsHisto.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">Aucun résultat trouvé</td></tr>'; return;
+  }
+
+  corpsHisto.innerHTML = donneesFiltrees.map(m => `
+    <tr>
+      <td><strong>${m.dateFormatee}</strong></td>
+      <td><span style="background:#f0f0ea; padding:2px 6px; border-radius:4px; font-family:monospace;">${m.lot_id}</span></td>
+      <td style="color:#E24B4A; font-weight:500;">${m.temperature} °C</td>
+      <td style="color:#378ADD; font-weight:500;">${m.humidite} %</td>
+      <td><span class="badge-conformite ${m.statutConformite === "Conforme" ? "ok" : "ko"}">${m.statutConformite === "Conforme" ? "🟢 Conforme" : "🔴 Alerte"}</span></td>
+    </tr>`).join("");
+}
+
+async function voirLot(lotId, el) {
+  document.getElementById("vue-pays").style.display = "none";
+  document.getElementById("vue-lot").style.display = "block";
+  document.getElementById("titre-lot").textContent = lotId;
+  
+  const lots = await get("/lots") || [];
+  const infosLot = lots.find(l => l.id === lotId);
+  
+  if (infosLot) {
+    document.getElementById("lot-jours").textContent = `${infosLot.jours_stockage} jours`;
+    document.getElementById("lot-poids").textContent = `${infosLot.poids_kg || '—'} kg`;
+  }
+
+  const mesures = await get(`/lots/${lotId}/mesures`) || [];
+  if (mesures.length > 0) {
+    let t0 = mesures[0].timestamp; if (!t0.endsWith('Z')) t0 += 'Z';
+    document.getElementById("date-graphe").innerHTML = `Traçabilité du lot : Mesures du ${new Date(t0).toLocaleDateString("fr-FR")}`;
+    
+    mesures.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const derniereMesure = mesures[0];
+
+    if (infosLot) {
+      const regles = obtenirSeuilsPourMesure(infosLot.exploitation_id);
+      const tOk = derniereMesure.temperature >= regles.tMin && derniereMesure.temperature <= regles.tMax;
+      const hOk = derniereMesure.humidite >= regles.hMin && derniereMesure.humidite <= regles.hMax;
+      
+      const statutEl = document.getElementById("lot-statut");
+      if (infosLot.jours_stockage > 365) {
+        statutEl.textContent = "❌ Périmé (> 1 an)";
+        statutEl.style.color = "#A32D2D";
+      } else if (tOk && hOk) {
+        statutEl.textContent = "🟢 Conforme";
+        statutEl.style.color = "#2ECC71";
+      } else {
+        statutEl.textContent = "🔴 Alerte Dérive";
+        statutEl.style.color = "#E24A4A";
+      }
+    }
+  } else {
+    document.getElementById("lot-statut").textContent = infosLot && infosLot.jours_stockage > 365 ? "❌ Périmé (> 1 an)" : "Aucune mesure";
+  }
+
+  const labels = mesures.map(m => {
+    let t = m.timestamp; if (!t.endsWith('Z')) t += 'Z';
+    return new Date(t).toLocaleTimeString("fr-FR");
+  }).reverse();
+  const temps = mesures.map(m => m.temperature).reverse();
+  const hums  = mesures.map(m => m.humidite).reverse();
+
+  if (chartTemp) chartTemp.destroy(); if (chartHum) chartHum.destroy();
+
+  chartTemp = new Chart(document.getElementById("chart-temp"), {
+    type: "line",
+    data: { labels, datasets: [{ data: temps, borderColor: "#E24B4A", tension: 0.4, fill: false }] },
+    options: { plugins: { legend: { display: false } } }
+  });
+  chartHum = new Chart(document.getElementById("chart-hum"), {
+    type: "line",
+    data: { labels, datasets: [{ data: hums, borderColor: "#378ADD", tension: 0.4, fill: false }] },
+    options: { plugins: { legend: { display: false } } }
+  });
+}
+
+function retourPays() {
+  document.getElementById("vue-lot").style.display = "none";
+  document.getElementById("vue-pays").style.display = "block";
+  rafraichirDonnees();
+}
+
+setInterval(async () => {
+  if (document.getElementById("vue-pays").style.display === "block") {
+    await rafraichirDonnees();
+  }
+}, 5000);
+
+async function telechargerCSV() {
+  const lotId = document.getElementById("titre-lot").textContent;
+  const mesures = await get(`/lots/${lotId}/mesures?limite=10000`);
+  if (!mesures || !mesures.length) {
+    alert("Aucune mesure à télécharger !");
+    return;
+  }
+
+  // Créer le contenu CSV
+  let csv = "Date/Heure,Lot ID,Temperature (C),Humidite (%),Statut\n";
+  for (const m of [...mesures].reverse()) {
+    const date = new Date(m.timestamp + "Z").toLocaleString("fr-FR");
+    const statut = m.est_alerte ? "ALERTE" : "CONFORME";
+    csv += `"${date}","${lotId}",${m.temperature},${m.humidite},"${statut}"\n`;
+  }
+
+  // Télécharger le fichier
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `historique_${lotId}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+selectionnerPays("bresil", document.querySelector(".pays-btn.actif"));
+</script>
+</body>
+</html>

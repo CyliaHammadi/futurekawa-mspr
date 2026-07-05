@@ -1,0 +1,43 @@
+services:
+
+  db:
+    image: postgres:15-alpine
+    platform: linux/amd64
+    environment:
+      POSTGRES_USER: futurekawa
+      POSTGRES_PASSWORD: futurekawa
+      POSTGRES_DB: futurekawa
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    platform: linux/amd64
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+
+  api:
+    build: .
+    platform: linux/amd64
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://futurekawa:futurekawa@db:5432/futurekawa
+      MQTT_HOST: mqtt
+      MQTT_PORT: "1883"
+      MQTT_TOPIC: futurekawa/#
+      SMTP_USER: ""
+    depends_on:
+      - db
+      - mqtt
+    volumes:
+      - .:/app
+    restart: on-failure
+
+volumes:
+  postgres_data:
