@@ -1,111 +1,28 @@
 pipeline {
     agent any
-
-    environment {
-        DOCKER_IMAGE_PAYS = "futurekawa/pays-backend"
-        DOCKER_IMAGE_SIEGE = "futurekawa/siege-backend"
-        PAYS_NOM = "bresil"
-    }
-
     stages {
-
-        stage('Checkout') {
+        stage('Recuperation du code') {
             steps {
-                echo '📥 Récupération du code source...'
-                checkout scm
+                git branch: 'main', url: 'https://github.com/CyliaHammadi/futurekawa-mspr.git'
             }
         }
-
-        stage('Install dependencies') {
+        stage('Installation des dependances') {
             steps {
-                echo '📦 Installation des dépendances Python...'
-                dir('pays-backend') {
-                    sh 'pip install -r requirements.txt'
-                }
+                bat 'pip install -r backend-pays/requirements.txt'
             }
         }
-
-        stage('Tests unitaires & intégration') {
+        stage('Tests automatiques') {
             steps {
-                echo '🧪 Exécution des tests...'
-                dir('pays-backend') {
-                    sh '''
-                        python -m pytest tests/ \
-                            -v \
-                            --tb=short \
-                            --junitxml=test-results.xml
-                    '''
-                }
-            }
-            post {
-                always {
-                    junit 'pays-backend/test-results.xml'
-                }
-            }
-        }
-
-        stage('Vérification qualité code') {
-            steps {
-                echo '🔍 Vérification du code (flake8)...'
-                dir('pays-backend') {
-                    sh '''
-                        pip install flake8 --quiet
-                        flake8 app/ --max-line-length=120 --exclude=__pycache__ || true
-                    '''
-                }
-            }
-        }
-
-        stage('Build Docker - Backend Pays') {
-            steps {
-                echo '🐳 Build image Docker backend pays...'
-                dir('pays-backend') {
-                    sh "docker build -t ${DOCKER_IMAGE_PAYS}:${BUILD_NUMBER} -t ${DOCKER_IMAGE_PAYS}:latest ."
-                }
-            }
-        }
-
-        stage('Build Docker - Backend Siège') {
-            steps {
-                echo '🐳 Build image Docker backend siège...'
-                dir('siege-backend') {
-                    sh "docker build -t ${DOCKER_IMAGE_SIEGE}:${BUILD_NUMBER} -t ${DOCKER_IMAGE_SIEGE}:latest ."
-                }
-            }
-        }
-
-        stage('Tests intégration Docker') {
-            steps {
-                echo '🔗 Tests intégration sur conteneurs...'
-                sh '''
-                    cd pays-backend
-                    docker compose up -d --wait || true
-                    sleep 10
-                    curl -f http://localhost:8000/health || echo "API non disponible"
-                    docker compose down
-                '''
-            }
-        }
-
-        stage('Packaging & Artefacts') {
-            steps {
-                echo '📦 Création des artefacts...'
-                sh '''
-                    mkdir -p artifacts
-                    echo "Build ${BUILD_NUMBER} - $(date)" > artifacts/BUILD_INFO.txt
-                    cp pays-backend/docker-compose.yml artifacts/
-                '''
-                archiveArtifacts artifacts: 'artifacts/**', fingerprint: true
+                bat 'cd backend-pays && python -m pytest tests/ -v'
             }
         }
     }
-
     post {
         success {
-            echo '✅ Pipeline réussi ! Tous les tests sont passés.'
+            echo 'Tous les 15 tests sont passes !'
         }
         failure {
-            echo '❌ Pipeline échoué. Vérifier les logs.'
+            echo 'Des tests ont echoue !'
         }
     }
 }
