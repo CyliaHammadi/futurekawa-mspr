@@ -8,7 +8,7 @@ pipeline {
         }
         stage('Installation des dependances') {
             steps {
-                bat 'pip install -r backend-pays/requirements.txt'
+                bat 'pip install -r backend-pays/requirements.txt --upgrade --user'
             }
         }
         stage('Tests automatiques') {
