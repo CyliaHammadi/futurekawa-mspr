@@ -2,7 +2,6 @@
 # FutureKawa — Solution IoT de suivi des stocks de café vert
 
 > **Projet MSPR — Bloc 4 — RNCP35584**  
-> Candidat : Cylia Hammadi  
 > Année académique : 2025-2026
 
 ---
