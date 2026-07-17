@@ -202,7 +202,7 @@ Le Jenkinsfile est disponible dans `backend-pays/tests/jenkins/Jenkinsfile`.
 
 ---
 
-## 📧 Système d'alertes email
+## Système d'alertes email
 
 Le système envoie **un seul email par pays** lors de chaque changement de statut :
 
@@ -258,8 +258,6 @@ futurekawa/colombie/mesures
 | GET | /alertes | Alertes actives |
 | POST | /mesures-iot | Recevoir une mesure IoT |
 | GET | /exploitations | Lister les exploitations |
-
-Documentation Swagger disponible sur : **http://localhost:8000/docs**
 
 ---
 
