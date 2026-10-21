@@ -18,6 +18,10 @@ Ce projet MSPR consiste à développer une solution applicative complète intég
 - Alerter instantanément par email les responsables en cas de dérive
 
 ---
+<img width="436" height="220" alt="image" src="https://github.com/user-attachments/assets/a81f2a6b-6123-47b3-9e41-a95c44c8059f" />
+<img width="383" height="256" alt="image" src="https://github.com/user-attachments/assets/2e19ec86-8dfe-47b5-a5fc-e6df31746a78" />
+
+
 
 ##  Architecture
 
